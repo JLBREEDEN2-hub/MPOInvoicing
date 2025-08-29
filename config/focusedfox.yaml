@@ -1,0 +1,109 @@
+# Consolidated Configuration for FOCUSEDFOX Invoice Allocation System
+
+# Program Information
+program_name: "FOCUSEDFOX"
+
+# Business Rules
+excluded_clins: [1,2,3,4,5,6,7,8,9,10,11,12,13,15,16,18,19]
+fee_descriptions: ["FEE", "Fee"]
+
+# Column Mappings
+column_mappings:
+  mpo:
+    clin: "CLIN"
+    slin: "SLIN"
+    funding: "Accum Total"
+    start_date: "InvoiceStartDate"
+  invoice:
+    labor_type: "BILL_FM_LN_LBL"
+    employee_id: "Empl/Vendor ID"
+    amount: "Billed Amt + Burdens"
+
+# Allocation Settings
+allocation:
+  # Chronological processing
+  sort_by_invoice_date: true
+  
+  # Coupling rules for Direct Labor and Overtime
+  enable_labor_coupling: true
+  coupled_labor_types:
+    - "DIRECT LABOR"
+    - "DL OVERTIME"
+  
+  # Minimum allocation threshold (amounts below this are not allocated)
+  minimum_allocation_threshold: 0.01
+  
+  # Labor priority mapping
+  labor_priorities:
+    "DIRECT LABOR": 1
+    "DL OVERTIME": 2
+    "CONS/SUBS/EQUIPMENT": 3
+    "CONSULTANTS": 3
+    "SUBCONTRACTORS": 3
+    "EQUIPMENT": 3
+    "ODC": 4
+    "OTHER DIRECT COSTS": 4
+
+# Data Validation
+validation:
+  # Required columns for MPO data
+  mpo_required_columns:
+    - "CLIN"
+    - "SLIN"
+    - "Description"
+    - "Accum Total"
+    - "InvoiceStartDate"
+    - "Prior ITD Bill"
+    - "Current ITD Bill"
+    - "Funding"
+    - "Remaining Funding"
+  
+  # Required columns for Invoice data
+  invoice_required_columns:
+    - "Project String"
+    - "Invoice ID"
+    - "Invoice Date"
+    - "BILL_FM_LN_LBL"
+    - "Billed Amt + Burdens"
+    - "CLIN"
+    - "Empl/Vendor ID"
+    - "Empl/Vendor Name"
+    - "Timesheet End Date"
+  
+  # Data quality checks
+  check_duplicates: true
+  check_negative_amounts: true
+  check_missing_clins: true
+  exclude_zero_funding: true
+  exclude_null_descriptions: true
+
+# Output Settings
+output:
+  # File format
+  format: "csv"
+  decimal_precision: 2
+  
+  # File naming
+  filename_pattern: "{program}_{year}{month:02d}_allocated_{timestamp}.csv"
+  timestamp_format: "%Y%m%d_%H%M%S"
+  
+  # Include summary statistics
+  include_summary: true
+  
+  # Archive settings
+  archive_results: true
+  archive_days_retention: 90
+
+# File Paths
+paths:
+  base_path: "."
+  data_path: "data"
+  output_path: "data/processed"
+  logs_path: "output/logs"
+
+# Logging Settings
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_handler: true
+  console_handler: true

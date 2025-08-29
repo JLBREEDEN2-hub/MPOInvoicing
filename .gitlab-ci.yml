@@ -1,0 +1,117 @@
+# GitLab CI/CD Pipeline for Invoice Allocation System
+# This pipeline processes MPO and Invoice files uploaded to GitLab
+
+stages:
+  - validate
+  - etl
+  - allocate
+  - report
+  - archive
+
+variables:
+  PYTHON_VERSION: "3.9"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  OUTPUT_DIR: "output"
+  ARCHIVE_DIR: "archive"
+
+cache:
+  paths:
+    - .cache/pip
+    - venv/
+
+before_script:
+  - python -m pip install --upgrade pip
+  - pip install -r requirements.txt
+
+# Stage 1: Validate uploaded files
+validate:input:
+  stage: validate
+  script:
+    - echo "Validating input files..."
+    - python scripts/validate_inputs.py --path data/raw
+  only:
+    changes:
+      - data/raw/mpo/**/*
+      - data/raw/invoices/**/*
+  artifacts:
+    reports:
+      dotenv: validation.env
+    expire_in: 1 day
+
+# Stage 2: ETL Pipeline - Process raw data
+etl:process:
+  stage: etl
+  dependencies:
+    - validate:input
+  script:
+    - echo "Running ETL pipeline..."
+    - python -m src.etl.pipeline --config config/settings.yaml
+  artifacts:
+    paths:
+      - data/processed/
+    expire_in: 7 days
+  only:
+    changes:
+      - data/raw/**/*
+      - src/etl/**/*
+      - config/**/*
+
+# Stage 3: Allocation Engine - Apply business logic
+allocate:process:
+  stage: allocate
+  dependencies:
+    - etl:process
+  script:
+    - echo "Running allocation engine..."
+    - python scripts/run_allocation.py --config config/settings.yaml
+  artifacts:
+    paths:
+      - output/*.csv
+      - output/logs/*.log
+    expire_in: 30 days
+  only:
+    - main
+    - develop
+    - merge_requests
+
+# Stage 4: Generate Reports
+report:generate:
+  stage: report
+  dependencies:
+    - allocate:process
+  script:
+    - echo "Generating reports..."
+    - python scripts/generate_report.py --output output/reports
+  artifacts:
+    paths:
+      - output/reports/
+    reports:
+      - output/reports/summary.html
+    expire_in: 30 days
+  only:
+    - main
+
+# Stage 5: Archive processed files
+archive:results:
+  stage: archive
+  dependencies:
+    - report:generate
+  script:
+    - echo "Archiving results..."
+    - mkdir -p archive/$(date +%Y%m)
+    - cp -r output/* archive/$(date +%Y%m)/
+    - python scripts/cleanup_old_archives.py --days 90
+  only:
+    - main
+  when: on_success
+
+# Manual trigger for reprocessing
+reprocess:manual:
+  stage: allocate
+  script:
+    - echo "Manual reprocessing triggered..."
+    - python scripts/run_allocation.py --reprocess --config config/settings.yaml
+  when: manual
+  only:
+    - main
+    - develop
